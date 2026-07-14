@@ -1,0 +1,60 @@
+%% Kolektibo — Production Roadmap Timeline
+%% Phases 0–5: hackathon → product
+
+gantt
+    title Kolektibo Production Roadmap (hackathon → product)
+    dateFormat YYYY-MM-DD
+    axisFormat %b %d
+
+    section Phase 0 — Hackathon
+    Submission (Jul 15)              :milestone, m1, 2026-07-15, 0d
+    Demo Day (Jul 18)                :milestone, m2, 2026-07-18, 0d
+    Grand Finale (Jul 24)            :milestone, m3, 2026-07-24, 0d
+    SCF 7.0 Application              :p0a, 2026-07-15, 10d
+    Legal Entity Registration        :p0b, 2026-07-15, 30d
+    Anchor Conversations (MoneyGram) :p0c, 2026-07-15, 60d
+
+    section Phase 1 — Identity & Persistence (wks 1–3)
+    Supabase Project + Migrations    :p1a, 2026-07-25, 5d
+    Auth (magic-link + Google)       :p1b, 2026-07-25, 7d
+    Profile CRUD + Settings          :p1c, 2026-07-28, 5d
+    i18n Framework (en/tl)           :p1d, 2026-07-30, 4d
+    Wallet Linking (nonce challenge) :p1e, 2026-08-01, 5d
+    Pools & Membership (invites/QR)  :p1f, 2026-08-01, 7d
+    Indexer v0 (chain_events poller) :crit, p1g, 2026-08-04, 5d
+    Backend v1 (stellar-sdk replace) :crit, p1h, 2026-08-04, 7d
+    Web Push + Notifications         :p1i, 2026-08-08, 5d
+
+    section Phase 2 — Custody & Money UX (wks 3–7)
+    Contract v2 (upgradeable)        :p2a, 2026-08-11, 10d
+    v1→v2 Migration Path             :p2b, after p2a, 5d
+    Passkey Smart Accounts (OZ)      :p2c, 2026-08-14, 12d
+    Gasless (OZ Relayer + Channels)  :p2d, 2026-08-18, 7d
+    Persona Migration Flow           :p2e, after p2c, 5d
+    Money-UX (tx queue/preview/export):p2f, 2026-08-25, 10d
+    Fiat Edge v1 (MoneyGram SEP-24)  :p2g, 2026-09-01, 14d
+
+    section Phase 3 — Paluwagan Mode (wks 6–9)
+    Paluwagan Read-model + UI        :p3a, 2026-08-25, 10d
+    Default Handling + Reminders     :p3b, after p3a, 7d
+    Regulatory Positioning           :p3c, 2026-09-01, 7d
+
+    section Phase 4 — Production Launch (wks 8–12)
+    Security Audit (Soroban Audit Bank):p4a, 2026-09-08, 14d
+    QA Hardening (Playwright E2E)    :p4b, 2026-09-08, 10d
+    Scalability (Commercial RPC)     :p4c, 2026-09-15, 7d
+    Indexer v1 (SubQuery/Mercury)    :p4d, 2026-09-15, 10d
+    Error Handling + Offline PWA     :p4e, 2026-09-22, 7d
+    Admin Tools + Support Runbooks   :p4f, 2026-09-22, 10d
+    Analytics (PostHog + dashboards) :p4g, 2026-09-29, 5d
+    Compliance Ops (NPC/DPA)         :p4h, 2026-09-29, 10d
+    Mainnet Cutover (Circle USDC)    :milestone, m4, 2026-10-10, 0d
+    Mainnet Pilot (1 real group)     :crit, p4i, 2026-10-10, 30d
+
+    section Phase 5 — Growth & Composability (post-pilot)
+    Yield (Blend via DeFindex)       :p5a, 2026-11-10, 14d
+    Phone OTP (Twilio)               :p5b, 2026-11-10, 7d
+    Full Taglish Pass                :p5c, 2026-11-17, 10d
+    Stellar Wallets Kit              :p5d, 2026-11-17, 7d
+    Social Layer (comments/minutes)  :p5e, 2026-11-24, 10d
+    Monetization (SaaS Pro tier)     :p5f, 2026-12-01, 14d

@@ -1,0 +1,270 @@
+%% Kolektibo — Full System Architecture (Current + Future Phases)
+%% AI-Governed Group Treasury on Stellar
+%% Read top-to-bottom: User → Frontend → Backend → Blockchain
+%% Dashed borders = future (not yet built)
+
+graph TB
+  %% ═══════════════════════════════════════════════════════════════════
+  %% USER LAYER
+  %% ═══════════════════════════════════════════════════════════════════
+  subgraph USERS["👥 Users (Barangay Officers & Members)"]
+    direction LR
+    Officer["Officer (2-of-3 signer)"]
+    Member["Member (contributor)"]
+    Invitee["Invitee (anonymous preview)"]
+  end
+
+  %% ═══════════════════════════════════════════════════════════════════
+  %% FRONTEND LAYER
+  %% ═══════════════════════════════════════════════════════════════════
+  subgraph FRONTEND["📱 Frontend — PWA / Capacitor (React 19 · TanStack · Tailwind v4)"]
+    direction TB
+    subgraph FE_CURRENT["Current (Built)"]
+      PWA["Vite 8 PWA + Service Worker"]
+      Router["TanStack Router (type-safe)"]
+      Query["TanStack Query (caching + refetch)"]
+      Bindings["Generated Contract Bindings"]
+      LocalKeys["localStorage Keypairs (3 personas)"]
+      ClientSign["Client-side signing (basicNodeSigner)"]
+      PesoDisplay["₱-first display (1 USDC ≈ ₱1)"]
+    end
+    subgraph FE_FUTURE["Future (Phase 2–5)"]
+      direction TB
+      Passkeys["Passkey Signing (OZ Smart Accounts):::future"]
+      TxQueue["Transaction Queue UI:::future"]
+      TxPreview["Plain-language TX Preview:::future"]
+      CSVExport["CSV/PDF Export (audit format):::future"]
+      Receipts["Receipts + OCR:::future"]
+      DuesNudge["Dues Reminders + Nudge:::future"]
+      i18n["i18n (English + Taglish):::future"]
+      PaluwaganUI["Paluwagan UI (ROSCA mode):::future"]
+      YieldUI["Yield Dashboard (opt-in):::future"]
+      WalletKit["Stellar Wallets Kit (Freighter/LOBSTR):::future"]
+    end
+  end
+
+  %% ═══════════════════════════════════════════════════════════════════
+  %% AUTH LAYER
+  %% ═══════════════════════════════════════════════════════════════════
+  subgraph AUTH["🔐 Auth & Identity (Supabase)"]
+    direction TB
+    subgraph AUTH_CURRENT["Current"]
+      EmailCode["Email 6-digit Code Verification"]
+      PasswordReset["Password Reset Flow"]
+    end
+    subgraph AUTH_FUTURE["Future (Phase 1–2)"]
+      MagicLink["Email Magic-link:::future"]
+      GoogleOAuth["Google OAuth:::future"]
+      AnonSignIn["Anonymous → linkIdentity():::future"]
+      Turnstile["Turnstile CAPTCHA:::future"]
+      PhoneOTP["Phone OTP (Phase 5):::future"]
+    end
+  end
+
+  %% ═══════════════════════════════════════════════════════════════════
+  %% BACKEND LAYER
+  %% ═══════════════════════════════════════════════════════════════════
+  subgraph BACKEND["⚙️ Backend — Node · Express 5 (services/ai)"]
+    direction TB
+    subgraph BE_AI["AI Module (OpenAI)"]
+      Rules["POST /rules — NL → Policy JSON"]
+      Ask["POST /ask — Grounded Q&A"]
+    end
+    subgraph BE_CHAIN["Chain Module (Backend v1)"]
+      direction TB
+      SDKDeploy["deployPool() — stellar-sdk"]
+      SDKMint["mintUsdc() — stellar-sdk"]
+      Faucet["POST /faucet"]
+      PoolCreate["POST /pool/create"]
+      Config["GET /config"]
+      CLIFallback["CLI Fallback (USE_SDK_BACKEND=0)"]
+    end
+    subgraph BE_WALLET["Wallet Module"]
+      NonceChallenge["POST /wallet/challenge (nonce)"]
+      WalletVerify["POST /wallet/verify (sig check)"]
+    end
+    subgraph BE_FUTURE["Future Backend (Phase 2–4)"]
+      KMS["Secrets in KMS:::future"]
+      AdminDash["Admin Dashboard API:::future"]
+      FeatureFlags["Feature Flags:::future"]
+      RateLimitAdv["Advanced Rate Limiting:::future"]
+      SanctionsScreen["Sanctions Screening (AML):::future"]
+    end
+  end
+
+  %% ═══════════════════════════════════════════════════════════════════
+  %% INDEXER LAYER
+  %% ═══════════════════════════════════════════════════════════════════
+  subgraph INDEXER["🔄 Indexer — Chain Events Read-Model"]
+    direction TB
+    subgraph IDX_CURRENT["Indexer v0 (Built)"]
+      Poller["getEvents Poller (8s interval)"]
+      EventNorm["Event Normalizer (contrib/spend_req/approve/execute)"]
+      Cursor["Checkpointed Cursor (per contract)"]
+      Backfill["Backfill (~83 min on first sight)"]
+    end
+    subgraph IDX_FUTURE["Indexer v1 (Phase 4)"]
+      SubQuery["SubQuery Self-host:::future"]
+      Mercury["Mercury (alternative):::future"]
+      ArchivalSync["Full Archival Sync:::future"]
+    end
+  end
+
+  %% ═══════════════════════════════════════════════════════════════════
+  %% NOTIFICATION LAYER
+  %% ═══════════════════════════════════════════════════════════════════
+  subgraph NOTIFY["🔔 Notifications"]
+    direction TB
+    FanOut["Fan-out (notify.ts)"]
+    NotifRows["notifications table (in-app feed)"]
+    WebPush["Web Push (VAPID)"]
+    PrefCheck["User Prefs Gate (per-type toggle)"]
+    subgraph NOTIFY_FUTURE["Future"]
+      Realtime["Supabase Realtime (live feed):::future"]
+      PushMobile["Mobile Push (Capacitor):::future"]
+    end
+  end
+
+  %% ═══════════════════════════════════════════════════════════════════
+  %% DATABASE LAYER
+  %% ═══════════════════════════════════════════════════════════════════
+  subgraph DATABASE["🗄️ Supabase Postgres (metadata — zero money authority)"]
+    direction TB
+    subgraph DB_TABLES["Schema v1 (19 tables)"]
+      direction LR
+      Profiles["profiles"]
+      Pools["pools"]
+      PoolMembers["pool_members"]
+      ChainEvents["chain_events"]
+      IndexerCursor["indexer_cursor"]
+      Notifications_T["notifications"]
+      PushSubs["push_subscriptions"]
+      UserWallets["user_wallets"]
+      WalletChallenges["wallet_link_challenges"]
+      AuthCodes["auth_email_codes"]
+      Invites["pool_invites"]
+      UserSettings["user_settings"]
+      AuditLog["audit_log"]
+    end
+    subgraph DB_FUTURE["Future Tables (Phase 3)"]
+      PaluwaganCycles["paluwagan_cycles:::future"]
+      CycleContrib["cycle_contributions:::future"]
+      PayoutOrder["payout_order (commit-reveal):::future"]
+      SpendMeta["spend_meta + receipts:::future"]
+      AIUsage["ai_usage (metering):::future"]
+    end
+    RLS["26 RLS Policies + 7 Functions"]
+  end
+
+  %% ═══════════════════════════════════════════════════════════════════
+  %% BLOCKCHAIN LAYER
+  %% ═══════════════════════════════════════════════════════════════════
+  subgraph BLOCKCHAIN["⛓️ Stellar Network (Soroban) — THE TRUST CORE"]
+    direction TB
+    subgraph CONTRACTS_CURRENT["Contracts (Deployed + Tested)"]
+      Treasury["Treasury Contract v1\n• initialize\n• contribute\n• request_spend\n• approve\n• execute\n• 10 view fns"]
+      Paluwagan["Paluwagan Contract\n• contribute (cycle-aware)\n• advance_cycle\n• 6/6 tests pass"]
+      USDC["USDC (SAC)\ntest issuer on testnet"]
+    end
+    subgraph CONTRACTS_FUTURE["Contract v2 (Phase 2)"]
+      Upgrade["update_current_contract_wasm:::future"]
+      ManageOfficer["manage_officer:::future"]
+      RollingBudgets["Monthly rolling budgets:::future"]
+      PauseSwitch["Pause switch:::future"]
+      DuesSchedule["Dues schedule:::future"]
+      TTLKeeper["TTL-extension keeper:::future"]
+    end
+    SorobanRPC["Soroban RPC\n(~24h event retention)"]
+    Friendbot["Friendbot (testnet funding)"]
+  end
+
+  %% ═══════════════════════════════════════════════════════════════════
+  %% EXTERNAL SERVICES (FUTURE)
+  %% ═══════════════════════════════════════════════════════════════════
+  subgraph EXTERNAL["🌐 External Services"]
+    direction TB
+    OpenAI["OpenAI (GPT-4o-mini)"]
+    subgraph EXT_FUTURE["Future Integrations"]
+      MoneyGram["MoneyGram Ramps (SEP-24)\nPH cash-in/out:::future"]
+      OZRelayer["OZ Relayer + Channels\n(gasless txs):::future"]
+      Blend["Blend Protocol (yield)\nvia DeFindex vaults:::future"]
+      CommRPC["Commercial RPC\n(Validation Cloud / QuickNode):::future"]
+      Sentry["Sentry (error tracking):::future"]
+      PostHog["PostHog (analytics):::future"]
+      CircleUSDC["Circle USDC (mainnet):::future"]
+    end
+  end
+
+  %% ═══════════════════════════════════════════════════════════════════
+  %% CONNECTIONS
+  %% ═══════════════════════════════════════════════════════════════════
+
+  %% User → Frontend
+  Officer --> PWA
+  Member --> PWA
+  Invitee --> PWA
+
+  %% Frontend → Backend
+  PWA --> Rules
+  PWA --> Ask
+  PWA --> Faucet
+  PWA --> PoolCreate
+  PWA --> Config
+  PWA --> NonceChallenge
+  PWA --> WalletVerify
+  PWA --> EmailCode
+
+  %% Frontend → Blockchain (direct signed calls)
+  ClientSign -->|"signed contract calls\n(contribute/request/approve/execute)"| SorobanRPC
+  Bindings --> SorobanRPC
+
+  %% Backend → Blockchain
+  SDKDeploy --> SorobanRPC
+  SDKMint --> USDC
+
+  %% Backend → External
+  Rules --> OpenAI
+  Ask --> OpenAI
+
+  %% Indexer → Blockchain
+  Poller -->|"getEvents (8s poll)"| SorobanRPC
+  EventNorm --> ChainEvents
+  Cursor --> IndexerCursor
+
+  %% Indexer → Notifications
+  EventNorm --> FanOut
+  FanOut --> NotifRows
+  FanOut --> PrefCheck
+  PrefCheck --> WebPush
+
+  %% Backend → Database
+  NonceChallenge --> WalletChallenges
+  WalletVerify --> UserWallets
+  EmailCode --> AuthCodes
+
+  %% Frontend → Database (via Supabase client + RLS)
+  PWA -.->|"Supabase client\n(RLS-protected)"| Profiles
+  PWA -.->|"read"| ChainEvents
+  PWA -.->|"read"| Notifications_T
+
+  %% Future connections
+  Passkeys -.->|"Phase 2"| OZRelayer
+  OZRelayer -.->|"sponsored txs"| SorobanRPC
+  MoneyGram -.->|"SEP-24\ncash-in/out"| USDC
+  YieldUI -.->|"invest_idle/redeem"| Blend
+
+  %% ═══════════════════════════════════════════════════════════════════
+  %% STYLING
+  %% ═══════════════════════════════════════════════════════════════════
+  classDef future fill:#1e293b,stroke:#facc15,stroke-width:2px,color:#facc15,stroke-dasharray: 5 5
+  classDef current fill:#0f172a,stroke:#22c55e,stroke-width:2px,color:#e2e8f0
+
+  style USERS fill:#312e81,stroke:#818cf8,color:#e0e7ff
+  style FRONTEND fill:#1e1b4b,stroke:#6366f1,color:#c7d2fe
+  style AUTH fill:#1c1917,stroke:#f97316,color:#fed7aa
+  style BACKEND fill:#022c22,stroke:#10b981,color:#a7f3d0
+  style INDEXER fill:#172554,stroke:#3b82f6,color:#bfdbfe
+  style NOTIFY fill:#4c1d95,stroke:#a78bfa,color:#ede9fe
+  style DATABASE fill:#1f2937,stroke:#9ca3af,color:#e5e7eb
+  style BLOCKCHAIN fill:#7c2d12,stroke:#f59e0b,color:#fef3c7
+  style EXTERNAL fill:#0c4a6e,stroke:#38bdf8,color:#e0f2fe

@@ -1,0 +1,108 @@
+%% Kolektibo — Data Flow Diagram
+%% Shows how a transaction flows from user action to notification
+
+sequenceDiagram
+    participant U as 👤 User (Officer/Member)
+    participant F as 📱 Frontend (PWA)
+    participant B as ⚙️ Backend (Node/Express)
+    participant AI as 🤖 OpenAI
+    participant DB as 🗄️ Supabase (Postgres)
+    participant SC as ⛓️ Soroban Contract
+    participant RPC as 🌐 Soroban RPC
+    participant IX as 🔄 Indexer v0
+    participant N as 🔔 Notifications
+
+    Note over U,N: ━━━ FLOW 1: Create a Pool ━━━
+
+    U->>F: "Create pool with these rules"
+    F->>B: POST /rules {text: "₱200/mo, 2-of-3 approval..."}
+    B->>AI: ChatCompletion (NL → policy JSON)
+    AI-->>B: {categories, threshold, dues...}
+    B-->>F: Policy for display
+    U->>F: Confirm + provide officer keys
+    F->>B: POST /pool/create {officers, threshold}
+    Note over B: Backend v1: uses stellar-sdk<br/>(not CLI shelling anymore!)
+    B->>RPC: Deploy WASM + Initialize contract
+    RPC-->>B: contractId
+    B-->>F: {ok: true, contractId}
+    F->>DB: Insert pool record
+    F-->>U: "Pool created! Share invite link"
+
+    Note over U,N: ━━━ FLOW 2: Contribute USDC ━━━
+
+    U->>F: "Contribute ₱500"
+    F->>F: Sign tx with localStorage key
+    F->>RPC: contribute(from, 5000000000)
+    RPC->>SC: require_auth → pull USDC into treasury
+    SC-->>RPC: ✅ Event: "contrib"
+    RPC-->>F: tx confirmed
+    F-->>U: "₱500 contributed!"
+
+    Note over IX,N: Meanwhile, the Indexer is polling...
+    IX->>RPC: getEvents (every 8 seconds)
+    RPC-->>IX: New event: {type: "contrib", from, amount}
+    IX->>DB: INSERT INTO chain_events
+    IX->>N: fanOut(pool, event)
+    N->>DB: INSERT INTO notifications (for officers)
+    N->>N: Check user prefs
+    N->>U: 🔔 Web Push: "₱500 contributed to Pool"
+
+    Note over U,N: ━━━ FLOW 3: Request + Approve + Release ━━━
+
+    U->>F: "Request ₱1,200 for Equipment"
+    F->>RPC: request_spend(proposer, "Equipment", 12000000000, recipient, memo)
+    RPC->>SC: Check category limit → auto-approve proposer
+    SC-->>RPC: ✅ spend_id = 1, approvals: 1/2
+    IX->>RPC: getEvents → "spend_req"
+    IX->>N: 🔔 "Approval needed: ₱1,200 for Equipment"
+
+    Note over U: A different officer approves:
+    U->>F: "Approve spend #1"
+    F->>RPC: approve(officer2, spend_id=1)
+    RPC->>SC: require_auth → record approval (2/2 ✅)
+    IX->>RPC: getEvents → "approve"
+    IX->>N: 🔔 "Spend #1 approved (2/2)"
+
+    Note over U: Anyone can now execute:
+    U->>F: "Release funds"
+    F->>RPC: execute(spend_id=1)
+    RPC->>SC: Check approvals ≥ threshold → transfer USDC
+    SC-->>RPC: ✅ Event: "execute" (USDC moved!)
+    IX->>RPC: getEvents → "execute"
+    IX->>N: 🔔 "₱1,200 released from Pool"
+    N->>U: Push to ALL members
+
+    Note over U,N: ━━━ FLOW 4: Ask the AI ━━━
+
+    U->>F: "How much do we have left?"
+    F->>RPC: Read contract state (balance, spends)
+    RPC-->>F: {balance: 600₱, spends: [...]}
+    F->>B: POST /ask {question, state}
+    B->>AI: Grounded Q&A (only uses on-chain state)
+    AI-->>B: "Your pool has ₱600. ₱1,200 was released for Equipment."
+    B-->>F: {answer}
+    F-->>U: "Your pool has ₱600..."
+
+    Note over U,N: ━━━ FUTURE: Fiat On/Off-Ramp (Phase 2) ━━━
+
+    rect rgb(30, 30, 50)
+        Note over U,RPC: MoneyGram SEP-24 (anchor-hosted KYC)
+        U->>F: "Cash in ₱1,000"
+        F->>F: Open anchor webview (MoneyGram)
+        Note over F: Anchor handles KYC + conversion
+        F-->>RPC: USDC deposited to user's address
+        U->>F: "Cash out ₱500"
+        F->>F: Open anchor webview
+        Note over F: Anchor converts USDC → PHP → GCash/bank
+    end
+
+    Note over U,N: ━━━ FUTURE: Paluwagan Cycle (Phase 3) ━━━
+
+    rect rgb(30, 30, 50)
+        Note over U,SC: ROSCA rotation (all members paid → auto-payout)
+        U->>F: "Contribute to cycle 2"
+        F->>RPC: paluwagan.contribute(cycle=2)
+        Note over SC: When all paid → advance_cycle()<br/>→ auto-pay cycle's recipient
+        SC-->>RPC: Payout event
+        IX->>N: 🔔 "Cycle 2 complete! ₱3,000 paid to Maria"
+    end

@@ -1,0 +1,181 @@
+%% Kolektibo — System Flowchart (Classic style)
+%% Top-to-bottom flow with decision diamonds
+
+flowchart TD
+    %% ── Entry Point ──
+    Start(["👤 User Opens App"])
+    Start --> AuthCheck{"Authenticated?"}
+
+    %% ── Auth Branch ──
+    AuthCheck -->|no| AuthMethod{"Auth Method?"}
+    AuthCheck -->|yes| Dashboard
+
+    AuthMethod -->|"email"| MagicLink["Email Magic-link / Code"]
+    AuthMethod -->|"google"| GoogleOAuth["Google OAuth"]
+    AuthMethod -->|"anonymous"| AnonSignIn["Anonymous Preview"]
+
+    MagicLink --> Verified{"Email Verified?"}
+    GoogleOAuth --> Dashboard
+    AnonSignIn --> PoolPreview["Preview Pool (limited view)"]
+    PoolPreview --> LinkIdentity["linkIdentity() → full account"]
+    LinkIdentity --> Dashboard
+
+    Verified -->|no| SendCode["Send 6-digit Code"]
+    SendCode --> VerifyCode["Enter Code"]
+    VerifyCode --> Dashboard
+    Verified -->|yes| Dashboard
+
+    %% ── Main Dashboard ──
+    Dashboard[["🏠 Dashboard"]]
+    Dashboard --> Action{"What do you want to do?"}
+
+    %% ── Action Branches ──
+    Action -->|"Create Pool"| CreatePool
+    Action -->|"Contribute"| Contribute
+    Action -->|"Request Spend"| RequestSpend
+    Action -->|"Ask AI"| AskAI
+    Action -->|"View Feed"| ViewFeed
+    Action -->|"Cash In/Out"| FiatRamp
+
+    %% ══════════════════════════════════════════════════════════════
+    %% FLOW 1: CREATE POOL
+    %% ══════════════════════════════════════════════════════════════
+    CreatePool["📝 Enter Pool Rules\n(plain English)"]
+    CreatePool --> AIRules["🤖 AI: POST /rules\n(NL → Policy JSON)"]
+    AIRules --> PolicyOK{"Policy looks good?"}
+    PolicyOK -->|no| CreatePool
+    PolicyOK -->|yes| SetOfficers["Set Officer Keys\n(2+ public keys)"]
+    SetOfficers --> BackendMode{"USE_SDK_BACKEND?"}
+
+    BackendMode -->|"yes (v1)"| SDKDeploy["stellar-sdk\ndeployPool()"]
+    BackendMode -->|"no (legacy)"| CLIDeploy["CLI shelling\nstellar.exe deploy"]
+
+    SDKDeploy --> DeployOK{"Deploy success?"}
+    CLIDeploy --> DeployOK
+
+    DeployOK -->|yes| PoolCreated[("✅ Pool Live on Stellar\n(contractId assigned)")]
+    DeployOK -->|no| DeployErr["❌ Error → retry"]
+    DeployErr --> SetOfficers
+
+    PoolCreated --> SaveDB["Save to Supabase\n(pools + pool_members)"]
+    SaveDB --> ShareInvite["Share Invite Link / QR"]
+    ShareInvite --> Dashboard
+
+    %% ══════════════════════════════════════════════════════════════
+    %% FLOW 2: CONTRIBUTE
+    %% ══════════════════════════════════════════════════════════════
+    Contribute["💰 Enter Amount (₱)"]
+    Contribute --> HasWallet{"Wallet linked?"}
+    HasWallet -->|no| LinkWallet["Nonce Challenge\n→ Sign → Verify"]
+    LinkWallet --> HasWallet
+    HasWallet -->|yes| SignContrib["Sign tx (client-side)\ncontribute(from, amount)"]
+    SignContrib --> SubmitRPC["Submit to Soroban RPC"]
+    SubmitRPC --> TxConfirm{"TX confirmed?"}
+    TxConfirm -->|no| TxFail["❌ Failed → show error"]
+    TxFail --> Dashboard
+    TxConfirm -->|yes| ContribDone[("✅ USDC in Treasury\nEvent: 'contrib'")]
+    ContribDone --> IndexerPick["🔄 Indexer picks up event"]
+    IndexerPick --> NotifyOfficers["🔔 Notify officers\n'₱X contributed'"]
+    NotifyOfficers --> Dashboard
+
+    %% ══════════════════════════════════════════════════════════════
+    %% FLOW 3: REQUEST SPEND
+    %% ══════════════════════════════════════════════════════════════
+    RequestSpend["📋 Fill Spend Request\n(category, amount, recipient, memo)"]
+    RequestSpend --> CategoryCheck{"Within category limit?"}
+    CategoryCheck -->|no| OverLimit["❌ OverCategoryLimit\n(contract rejects)"]
+    OverLimit --> Dashboard
+    CategoryCheck -->|yes| SpendCreated[("Spend #N created\nauto-approve: 1/threshold")]
+    SpendCreated --> NeedMore{"Enough approvals?"}
+
+    NeedMore -->|no| WaitApproval["⏳ Wait for other officers"]
+    WaitApproval --> NotifyApproval["🔔 'Approval needed'\n(indexer → push)"]
+    NotifyApproval --> OfficerApproves["Officer approves\n(require_auth)"]
+    OfficerApproves --> DupeCheck{"Already approved?"}
+    DupeCheck -->|yes| DupeErr["❌ AlreadyApproved"]
+    DupeErr --> WaitApproval
+    DupeCheck -->|no| RecordApproval["Record approval on-chain"]
+    RecordApproval --> NeedMore
+
+    NeedMore -->|yes| CanExecute["🟢 Release unlocked"]
+    CanExecute --> Execute["execute(spend_id)\n(permissionless)"]
+    Execute --> Released[("✅ USDC transferred\nto recipient")]
+    Released --> IndexerRelease["🔄 Indexer: 'execute' event"]
+    IndexerRelease --> NotifyAll["🔔 Notify ALL members\n'₱X released from Pool'"]
+    NotifyAll --> Dashboard
+
+    %% ══════════════════════════════════════════════════════════════
+    %% FLOW 4: ASK AI
+    %% ══════════════════════════════════════════════════════════════
+    AskAI["❓ Type question\n'How much do we have?'"]
+    AskAI --> FetchState["Read contract state\n(balance, spends, members)"]
+    FetchState --> AIAsk["🤖 POST /ask\n{question, state}"]
+    AIAsk --> AIAnswer["Plain-language answer\ngrounded in on-chain data"]
+    AIAnswer --> Dashboard
+
+    %% ══════════════════════════════════════════════════════════════
+    %% FLOW 5: VIEW FEED (Indexer-powered)
+    %% ══════════════════════════════════════════════════════════════
+    ViewFeed["📰 Activity Feed"]
+    ViewFeed --> ReadEvents["Read chain_events\n+ notifications (RLS)"]
+    ReadEvents --> ShowFeed["Display timeline:\n• contributions\n• spend requests\n• approvals\n• releases"]
+    ShowFeed --> Dashboard
+
+    %% ══════════════════════════════════════════════════════════════
+    %% FLOW 6: FIAT RAMP (Future — Phase 2)
+    %% ══════════════════════════════════════════════════════════════
+    FiatRamp{"Cash in or out?"}
+    FiatRamp -->|"cash in"| CashIn["Open MoneyGram\nSEP-24 webview"]:::future
+    FiatRamp -->|"cash out"| CashOut["Open MoneyGram\nSEP-24 webview"]:::future
+    CashIn --> AnchorKYC["Anchor handles KYC\n+ conversion"]:::future
+    CashOut --> AnchorKYC
+    AnchorKYC --> FiatDone["USDC ↔ PHP\n(GCash / bank)"]:::future
+    FiatDone --> Dashboard
+
+    %% ══════════════════════════════════════════════════════════════
+    %% INDEXER BACKGROUND PROCESS
+    %% ══════════════════════════════════════════════════════════════
+    subgraph INDEXER_BG["🔄 Background: Indexer v0 (runs every 8s)"]
+        direction TB
+        Poll["Poll Soroban RPC\ngetEvents()"]
+        Poll --> HasEvents{"New events?"}
+        HasEvents -->|no| Poll
+        HasEvents -->|yes| Normalize["Normalize event\n(contrib/spend_req/approve/execute)"]
+        Normalize --> Upsert["Upsert → chain_events table\n(deduplicated)"]
+        Upsert --> IsBackfill{"Is backfill?"}
+        IsBackfill -->|yes| SkipNotify["Skip notifications\n(stale events)"]
+        SkipNotify --> UpdateCursor["Update indexer_cursor"]
+        IsBackfill -->|no| FanOut["Fan-out notifications\n+ Web Push"]
+        FanOut --> UpdateCursor
+        UpdateCursor --> Poll
+    end
+
+    %% ══════════════════════════════════════════════════════════════
+    %% FUTURE: PALUWAGAN (Phase 3)
+    %% ══════════════════════════════════════════════════════════════
+    subgraph PALUWAGAN_FUTURE["🔮 Future: Paluwagan / ROSCA (Phase 3)"]
+        direction TB
+        PalStart["Members join cycle"]:::future
+        PalStart --> PalContrib["Everyone contributes\n(cycle-aware)"]:::future
+        PalContrib --> AllPaid{"All members paid?"}:::future
+        AllPaid -->|no| PalRemind["Send reminder /\npenalty display"]:::future
+        PalRemind --> PalContrib
+        AllPaid -->|yes| AdvanceCycle["advance_cycle()\n(permissionless)"]:::future
+        AdvanceCycle --> AutoPay["Auto-pay cycle's\nrecipient"]:::future
+        AutoPay --> CycleDone{"All cycles done?"}:::future
+        CycleDone -->|no| PalContrib
+        CycleDone -->|yes| PalComplete["✅ Paluwagan complete\n(zero-sum)"]:::future
+    end
+
+    %% ══════════════════════════════════════════════════════════════
+    %% STYLING
+    %% ══════════════════════════════════════════════════════════════
+    classDef future fill:#1e293b,stroke:#facc15,stroke-width:2px,color:#facc15,stroke-dasharray:5 5
+    classDef default fill:#0ea5e9,stroke:#0284c7,color:#fff
+    classDef decision fill:#e11d48,stroke:#be123c,color:#fff
+    classDef success fill:#16a34a,stroke:#15803d,color:#fff
+    classDef error fill:#dc2626,stroke:#b91c1c,color:#fff
+
+    class AuthCheck,PolicyOK,BackendMode,DeployOK,HasWallet,TxConfirm,CategoryCheck,NeedMore,DupeCheck,HasEvents,IsBackfill,FiatRamp,AllPaid,CycleDone,Verified,AuthMethod decision
+    class PoolCreated,ContribDone,Released success
+    class DeployErr,TxFail,OverLimit,DupeErr error
